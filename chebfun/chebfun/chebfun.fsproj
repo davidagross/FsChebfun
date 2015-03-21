@@ -33,6 +33,22 @@
     <DocumentationFile>bin\Release\chebfun.XML</DocumentationFile>
   </PropertyGroup>
   <ItemGroup>
+    <Reference Include="FsEye">
+      <HintPath>..\packages\FsEye.2.1.0\lib\net40\FsEye.dll</HintPath>
+      <Private>True</Private>
+    </Reference>
+    <Reference Include="FsEye.DataGridView.Plugin">
+      <HintPath>..\packages\FsEye.2.1.0\lib\net40\plugins\FsEye.DataGridView.Plugin.dll</HintPath>
+      <Private>True</Private>
+    </Reference>
+    <Reference Include="FsEye.PropertyGrid.Plugin">
+      <HintPath>..\packages\FsEye.2.1.0\lib\net40\plugins\FsEye.PropertyGrid.Plugin.dll</HintPath>
+      <Private>True</Private>
+    </Reference>
+    <Reference Include="FsEye.TreeView.Plugin">
+      <HintPath>..\packages\FsEye.2.1.0\lib\net40\plugins\FsEye.TreeView.Plugin.dll</HintPath>
+      <Private>True</Private>
+    </Reference>
     <Reference Include="FSharp.Core">
       <HintPath>..\packages\FSharp.Core.3.1.2.1\lib\net40\FSharp.Core.dll</HintPath>
       <Private>True</Private>
@@ -58,6 +74,8 @@
     <None Include="Script.fsx" />
     <None Include="packages.config" />
     <Compile Include="test_chebfun.fs" />
+    <None Include="FsEye.fsx" />
+    <None Include="app.config" />
   </ItemGroup>
   <PropertyGroup>
     <MinimumVisualStudioVersion Condition="'$(MinimumVisualStudioVersion)' == ''">11</MinimumVisualStudioVersion>
