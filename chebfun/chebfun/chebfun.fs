@@ -4,7 +4,7 @@ open MathNet.Numerics.IntegralTransforms
 
 // skip all these layers of abstraction for now:
 // chebtech1 < chebtech < smoothfun < onefun
-type chebtech2( c: double list , v: double , h: double , i: bool , e: double) = 
+type chebtech2( c: double array , v: double , h: double , i: bool , e: double) = 
     // properties
     let mutable eps = e
     // members
@@ -15,67 +15,73 @@ type chebtech2( c: double list , v: double , h: double , i: bool , e: double) =
     member this.epslevel with get() = eps and set(e) = eps <- e
     // dependent properties
     member this.length with get() = this.coeffs.Length
-    member this.isempty with get() = this.coeffs.IsEmpty
+    member this.isempty with get() = Array.isEmpty(this.coeffs)
 
     static member chebpts( n ) =
         match n with 
             // Special case (no points)
-            | 0 -> List<double>.Empty
+            | 0 -> Array.empty<double>
             // Special case (single point)
-            | 1 -> [0.0]
+            | 1 -> [|0.0|]
             // General case
             | _ ->
                 // Chebyshev points
                 let m = float(n) - 1.0
-                List.map( fun x -> Math.Sin(Math.PI * x / (2.0*m) ) ) [-m..2.0..m] // (Use of sine enforces symmetry.)
+                Array.map( fun x -> Math.Sin(Math.PI * x / (2.0*m) ) ) [|-m..2.0..m|] // (Use of sine enforces symmetry.)
 
     member this.points with get() = chebtech2.chebpts(this.length)
 
     static member barywts( n ) =
         match n with
             // Special case (no points)
-            | 0 -> List<double>.Empty
+            | 0 -> Array.empty<double>
             // Special case (single point)
-            | 1 -> [1.0]
+            | 1 -> [|1.0|]
             // General case
             | _ ->
                 // Note v.[n-1] is positive.
-                List.append (List.replicate (n-1) 1.0) [0.5] 
-                |> List.mapi( fun i x -> 
+                Array.append (Array.create (n-1) 1.0) [|0.5|] 
+                |> Array.mapi( fun i x -> 
                     match i with
                     | 0 -> 0.5  * x
-                    | i when [(n-2)..(-2)..0] |> List.exists( fun x -> x = i ) -> -1.0
+                    | i when [|(n-2)..(-2)..0|] |> Array.exists( fun x -> x = i ) -> -1.0
                     | _ -> x ) 
 
-    static member clenshaw( x:double list , c:double list ) = 
+    static member clenshaw( x:double array , c:double array ) = 
         // Clenshaw scheme for scalar-valued functions.
-        let mutable bk1 = List.replicate x.Length 0.0; 
-        let mutable bk2 = bk1;
+        let mutable bk1 = Array.create x.Length 0.0;
+        let mutable bk2 = bk1
+        let mutable xb1 = bk1
+        let mutable xb2 = bk1
         let n = c.Length - 1;
         for k in [(n)..(-2)..2] do
-            bk2 <- List.map3( fun x b1 b2 -> c.[k] + 2.0*x*b1 - b2 ) x bk1 bk2
-            bk1 <- List.map3( fun x b1 b2 -> c.[k-1] + 2.0*x*b2 - b1 ) x bk1 bk2
+            xb1 <- Array.map2( fun x y -> x * y ) x bk1
+            bk2 <- Array.map2( fun xb1 b2 -> c.[k] + 2.0*xb1 - b2 ) xb1 bk2
+            xb2 <- Array.map2( fun x y -> x * y ) x bk2
+            bk1 <- Array.map2( fun xb2 b1 -> c.[k-1] + 2.0*xb2 - b1 ) xb2 bk1
         if (n % 2 = 1) then
-            let tmp1 = List.map3( fun x b1 b2 -> c.[1] + 2.0*x*b1 - b2 ) x bk1 bk2
+            xb1 <- Array.map2( fun x y -> x * y ) x bk1
+            let tmp1 = Array.map2( fun xb1 b2 -> c.[1] + 2.0*xb1 - b2 ) xb1 bk2
             let tmp2 = bk1
             bk1 <- tmp1
             bk2 <- tmp2
-        List.map3( fun x b1 b2 -> c.[0] + x*b1 - b2 ) x bk1 bk2
+        xb1 <- Array.map2( fun x y -> x * y ) x bk1
+        Array.map2( fun xb1 b2 -> c.[0] + xb1 - b2 ) xb1 bk2
 
-    static member feval( f:chebtech2 , x:double list ) =
+    static member feval( f:chebtech2 , x:double array ) =
         match f.isempty with
-            | true -> List<double>.Empty
+            | true -> Array.empty<double>
             | false -> chebtech2.clenshaw( x , f.coeffs )
 
-    static member refine( op: double -> double , values: double list ) = 
+    static member refine( op: double -> double , values: double array ) = 
 
         // Default refinement function for resampling scheme.
-        let refineResampling( op: double -> double , values: double list ) = 
+        let refineResampling( op: double -> double , values: double array ) = 
 
             let mutable giveUp = false
             let mutable n = 0
 
-            if List.isEmpty(values) then
+            if Array.isEmpty(values) then
                 // Choose initial n based upon minSamples:
                 n <- int(Math.Pow( 2.0, Math.Ceiling( Math.Log(17.0 - 1.0)/Math.Log(2.0) ) )) + 1
             else
@@ -83,7 +89,7 @@ type chebtech2( c: double list , v: double , h: double , i: bool , e: double) =
 
             // n is too large:
             if (n > 65537) then
-                if List.isEmpty(values) then
+                if Array.isEmpty(values) then
                     // don't give up if we haven't sampled at least once.
                     n <- 65537
                     giveUp <- false
@@ -99,17 +105,17 @@ type chebtech2( c: double list , v: double , h: double , i: bool , e: double) =
                     let x = chebtech2.chebpts(n)
 
                     // Evaluate the operator:
-                    let newValues = List.map( op ) x
+                    let newValues = Array.map( op ) x
                     ( newValues , giveUp )
 
         // Default refinement function for single ('nested') sampling.
-        let refineNested( op: double -> double , values: double list ) = 
+        let refineNested( op: double -> double , values: double array ) = 
 
             let mutable giveUp = false
             let mutable n = 0
-            let mutable newValues = List<double>.Empty
+            let mutable newValues = Array.empty<double>
 
-            if List.isEmpty(values) then
+            if Array.isEmpty(values) then
                 refineResampling( op , values )
             else
                 // Compute new n by doubling (we must do this when not resampling).
@@ -127,32 +133,32 @@ type chebtech2( c: double list , v: double , h: double , i: bool , e: double) =
                         // 2nd-kind Chebyshev grid and take every 2nd element
                         let x = 
                             chebtech2.chebpts(n)
-                            |> List.mapi( fun i x -> (i , x) )
-                            |> List.filter( fun (i, x) -> i % 2 = 1 )
-                            |> List.map snd
+                            |> Array.mapi( fun i x -> (i , x) )
+                            |> Array.filter( fun (i, x) -> i % 2 = 1 )
+                            |> Array.map snd
 
                         // Evaluate the operator:
-                        let newValues = List.map( op ) x
+                        let newValues = Array.map( op ) x
 
                         // Merge stored values:
-                        let allValues = 
-                            List.append [values.Head] (
-                                List.zip newValues values.Tail
-                                |> List.collect( fun x -> [fst(x) ; snd(x)] ) )
+                        let allValues =
+                            Array.append [|values.[0]|] (
+                                Array.zip newValues values.[1..values.Length-1]
+                                |> Array.collect( fun x -> [|fst(x) ; snd(x)|] ) )
 
                         ( allValues , giveUp )
 
         // (Don't yet) decide which refinement to use:
         refineNested( op , values )
 
-    static member extrapolate( values: double list ) = 
-        let maskNaN = List.map( Double.IsNaN ) values
-        let maskInf = List.map( Double.IsInfinity ) values
+    static member extrapolate( values: double array ) = 
+        let maskNaN = Array.map( Double.IsNaN ) values
+        let maskInf = Array.map( Double.IsInfinity ) values
         let mask = 
-            List.zip maskNaN maskInf 
-            |> List.map( fun x -> fst(x) || snd (x) )
+            Array.zip maskNaN maskInf 
+            |> Array.map( fun x -> fst(x) || snd (x) )
         
-        if List.exists( fun x -> x = true ) mask then
+        if Array.exists( fun x -> x = true ) mask then
             // Obtain Chebyshev points:
             let n = values.Length
             let x = chebtech2.chebpts(n)
@@ -160,26 +166,26 @@ type chebtech2( c: double list , v: double , h: double , i: bool , e: double) =
             // The good and the bad
             let xbadTuple , xgoodTuple = 
                 x
-                |> List.zip mask
-                |> List.partition( fun (m , x) -> m = true )
-            let xbad = xbadTuple |> List.map snd
-            let xgood = xgoodTuple |> List.map snd
+                |> Array.zip mask
+                |> Array.partition( fun (m , x) -> m = true )
+            let xbad = xbadTuple |> Array.map snd
+            let xgood = xgoodTuple |> Array.map snd
 
-            // if List.isEmpty(xgood) then
-            if not(List.isEmpty(xbad)) then
+            // if Array.isEmpty(xgood) then
+            if not(Array.isEmpty(xbad)) then
                 failwith "Too many NaNs/Infs to handle."
             // else
                 // // Compute the modified barycentric weights:
                 // let mutable w = chebtech2.barywts(n) // Standard weights
                 // w <- w 
-                // |> List.zip mask 
-                // |> List.filter( fun (m , x) -> m = false ) 
-                // |> List.map snd // Barycentric weights corresponding to the good points.
+                // |> Array.zip mask 
+                // |> Array.filter( fun (m , x) -> m = false ) 
+                // |> Array.map snd // Barycentric weights corresponding to the good points.
                 // ...
 
         ( values , maskNaN , maskInf )
 
-    static member vals2coeffs( values: double list ) = 
+    static member vals2coeffs( values: double array ) = 
         // Get the length ofthe input:
         let n = values.Length
 
@@ -188,15 +194,14 @@ type chebtech2( c: double list , v: double , h: double , i: bool , e: double) =
             | _ -> 
                 // Mirror the values (to fake a DCT using an FFT):
                 let coeffs = 
-                    (List.append (List.rev values.Tail) (List.rev (List.rev values).Tail))
-                    |> List.toArray
+                    (Array.append (Array.rev values.[1..values.Length-1]) (Array.rev (Array.rev values).[1..values.Length-1]))
                     |> Array.map( fun x -> Numerics.Complex( x , 0.0 ) )
                 // Real-valued case (and truncate and scale the interior coefficients):
                 Fourier.Inverse( coeffs , FourierOptions.Matlab )
-                Array.toList (Array.map( fun (x:Numerics.Complex) -> double(x.Real) )  coeffs)
-                |> List.mapi( fun i x -> ( i , x ) )
-                |> List.filter( fun ( i , x ) -> i < n )
-                |> List.map( fun ( i , x ) -> 
+                (Array.map( fun (x:Numerics.Complex) -> double(x.Real) )  coeffs)
+                |> Array.mapi( fun i x -> ( i , x ) )
+                |> Array.filter( fun ( i , x ) -> i < n )
+                |> Array.map( fun ( i , x ) -> 
                     match i with
                     | 0 -> x
                     | i when i = n-1 -> x
@@ -204,7 +209,7 @@ type chebtech2( c: double list , v: double , h: double , i: bool , e: double) =
                 // TODO Imaginary-valued case:
                 // TODO General case:
 
-    static member coeffs2vals( coeffs: double list ) = 
+    static member coeffs2vals( coeffs: double array ) = 
         // Get the length ofthe input:
         let n = coeffs.Length
 
@@ -214,72 +219,71 @@ type chebtech2( c: double list , v: double , h: double , i: bool , e: double) =
                 // Scale the coefficients by 1/2 and mirror them (to fake a DCT using an FFT):
                 let values = 
                     coeffs
-                    |> List.mapi( fun i x -> ( i , x ) )
-                    |> List.map( fun ( i , x ) -> 
+                    |> Array.mapi( fun i x -> ( i , x ) )
+                    |> Array.map( fun ( i , x ) -> 
                         match i with
                         | 0 -> x
                         | i when i = n - 2 -> x
                         | _ -> x/2.0 )
-                    |> fun x -> List.append x ((List.rev x.Tail).Tail)
-                    |> List.toArray
+                    |> fun x -> Array.append x (Array.rev x.[1..x.Length-2])
                     |> Array.map( fun x -> Numerics.Complex( x , 0.0 ) )
                 // Real-valued case (and flip and truncate):
                 Fourier.Forward( values , FourierOptions.Matlab )
-                Array.toList (Array.map( fun (x:Numerics.Complex) -> double(x.Real) ) values)
-                |> List.mapi( fun i x -> ( i , x ) )
-                |> List.filter( fun ( i , x ) -> i < n )
-                |> List.rev
-                |> List.map snd
+                (Array.map( fun (x:Numerics.Complex) -> double(x.Real) ) values)
+                |> Array.mapi( fun i x -> ( i , x ) )
+                |> Array.filter( fun ( i , x ) -> i < n )
+                |> Array.rev
+                |> Array.map snd
                 // TODO Imaginary-valued case:
                 // TODO General case:
 
-    static member alias( coeffs:double list , m:int ) =
+    static member alias( coeffs:double array , m:int ) =
         let n = coeffs.Length
 
         match m with
             | m when m > n -> // Pad with zeros
-                List.append coeffs (List.replicate (m-n) 0.0)
+                Array.append coeffs (Array.create (m-n) 0.0)
             // Alias coefficients: (see eq. (4.4) of Trefethen, Approximation Theory and
             // Approximation Practice, SIAM, 2013):
             | 1 -> // Reduce to a single point
-                let e =List.map( fun x -> Math.Pow(-1.0,x) ) [0.0..Math.Ceiling(double(n)/2.0)]
+                let e =Array.map( fun x -> Math.Pow(-1.0,x) ) [|0.0..Math.Ceiling(double(n)/2.0)|]
                 let c = 
                     coeffs 
-                    |> List.mapi( fun i x -> ( i , x ) ) 
-                    |> List.filter( fun ( i , x ) -> i % 2 = 0)
-                    |> List.map snd
-                List.map2( fun x y -> x * y ) e c // and truncate:
-                |> List.mapi( fun i x -> ( i , x ) )
-                |> List.filter( fun ( i , x ) -> i < m )
-                |> List.map snd
+                    |> Array.mapi( fun i x -> ( i , x ) ) 
+                    |> Array.filter( fun ( i , x ) -> i % 2 = 0)
+                    |> Array.map snd
+                Array.map2( fun x y -> x * y ) e c // and truncate:
+                |> Array.mapi( fun i x -> ( i , x ) )
+                |> Array.filter( fun ( i , x ) -> i < m )
+                |> Array.map snd
             | m when m > n/2 -> // If m > n/2, only single coefficients are aliased, and we can vectorise.
-                let j = [m..(n-1)]
-                let k = List.map( fun j -> Math.Abs( (j + m - 3 + 1) % (2*m - 2) - m + 2 ) ) j
+                let j = [|m..(n-1)|]
+                let k = Array.map( fun j -> Math.Abs( (j + m - 3 + 1) % (2*m - 2) - m + 2 ) ) j
                 coeffs
-                |> List.mapi( fun i x -> 
+                |> Array.mapi( fun i x -> 
                     match i with 
-                    | i when k|> List.exists( fun k -> k = i ) 
-                        -> x + coeffs.[j.[ k |> List.findIndex( fun k -> k = i ) ]] 
+                    | i when k|> Array.exists( fun k -> k = i ) 
+                        -> x + coeffs.[j.[ k |> Array.findIndex( fun k -> k = i ) ]] 
                     | _ -> x ) // and truncate:
-                |> List.mapi( fun i x -> ( i , x ) )
-                |> List.filter( fun ( i , x ) -> i < m )
-                |> List.map snd
+                |> Array.mapi( fun i x -> ( i , x ) )
+                |> Array.filter( fun ( i , x ) -> i < m )
+                |> Array.map snd
             | _ -> // Otherwise we must do everything in a tight loop. (Which is slower!)
-                let j = [m..(n-1)]
-                let k = List.map( fun j -> Math.Abs( (j + m - 3 + 1) % (2*m - 2) - m + 2 ) ) j
+                let j = [|m..(n-1)|]
+                let k = Array.map( fun j -> Math.Abs( (j + m - 3 + 1) % (2*m - 2) - m + 2 ) ) j
                 coeffs
-                |> List.mapi( fun i x -> 
+                |> Array.mapi( fun i x -> 
                     match i with 
-                    | i when j|> List.exists( fun j -> j = i ) 
-                        -> x + coeffs.[k.[ j |> List.findIndex( fun j -> j = i ) ]] 
+                    | i when j|> Array.exists( fun j -> j = i ) 
+                        -> x + coeffs.[k.[ j |> Array.findIndex( fun j -> j = i ) ]] 
                     | _ -> x ) // and truncate:
-                |> List.mapi( fun i x -> ( i , x ) )
-                |> List.filter( fun ( i , x ) -> i < m )
-                |> List.map snd   
+                |> Array.mapi( fun i x -> ( i , x ) )
+                |> Array.filter( fun ( i , x ) -> i < m )
+                |> Array.map snd   
 
-    static member happinessCheck( f: chebtech2 , op: double -> double , values:double list) = 
+    static member happinessCheck( f: chebtech2 , op: double -> double , values:double array) = 
         
-        let happinessRequirements( values:double list , coeffs:double list , x:double list , vscale:double , hscale:double , epslevel:double ) =
+        let happinessRequirements( values:double array , coeffs:double array , x:double array , vscale:double , hscale:double , epslevel:double ) =
             // Grab the size:
             let n = values.Length
 
@@ -294,12 +298,12 @@ type chebtech2( c: double list , v: double , h: double , i: bool , e: double) =
 
             // Estimate the condition number of the input function by
             //    ||f(x+eps(x)) - f(x)||_inf / ||f||_inf ~~ (eps(hscale)/vscale)*f'.            
-            let dy = List.map2( fun x y -> y - x ) (List.rev (List.rev values).Tail) values.Tail
-            let dx = List.map2( fun x y -> y - x ) (List.rev (List.rev x).Tail) x.Tail
+            let dy = Array.map2( fun x y -> y - x ) values.[0..n-2] values.[1..n-1]
+            let dx = Array.map2( fun x y -> y - x ) x.[0..n-2] x.[1..n-1]
             let gradEst = // Finite difference approx.
-                List.map2( fun x y -> y/x ) dx dy
-                |> List.map( Math.Abs )
-                |> List.max
+                Array.map2( fun x y -> y/x ) dx dy
+                |> Array.map( Math.Abs )
+                |> Array.max
             let condEst = // Condition number estimate, using estimate of MATLAB's eps(hscale)
                 Math.Min( 2.2e-16 * hscale / vscale * gradEst , minPrec )
 
@@ -309,7 +313,7 @@ type chebtech2( c: double list , v: double , h: double , i: bool , e: double) =
             ( testLength , epslevelOut )
         
         // What does happiness mean to you?
-        let classicCheck ( f:chebtech2 , values: double list ) = 
+        let classicCheck ( f:chebtech2 , values: double array ) = 
             // Deal with special cases
 
             // Determine n (the length of the input)
@@ -330,33 +334,33 @@ type chebtech2( c: double list , v: double , h: double , i: bool , e: double) =
                     ( false , epslevel , n )
                 else
                     // NaNs are not allowed
-                    if List.exists( Double.IsNaN ) f.coeffs then failwith "Function returned NaN when evaluated"
+                    if Array.exists( Double.IsNaN ) f.coeffs then failwith "Function returned NaN when evaluated"
 
                     // Compute some values if none were given
-                    if List.isEmpty( values ) then failwith "No values were given"
+                    if Array.isEmpty( values ) then failwith "No values were given"
                         // let values = chebtech2.coeffs2vals( f.coeffs )
 
                     // Check for convergence and chop location
 
                     // Absolute value of coefficients, relative to vscale:
-                    let ac = List.map( fun (x:double) -> Math.Abs(x)/f.vscale ) f.coeffs
+                    let ac = Array.map( fun (x:double) -> Math.Abs(x)/f.vscale ) f.coeffs
                     
                     // Happiness requirements:
                     let testLength , epslevel = happinessRequirements( values, f.coeffs, f.points, f.vscale, f.hscale, epslevel)
                     
                     let tail = 
                         ac
-                        |> List.mapi( fun i x -> ( i , x ) )
-                        |> List.filter( fun ( i , x ) -> i >= n - testLength )
-                        |> List.map snd
-                    if (List.max tail < epslevel) then // We have converged! Chop tail:
+                        |> Array.mapi( fun i x -> ( i , x ) )
+                        |> Array.filter( fun ( i , x ) -> i >= n - testLength )
+                        |> Array.map snd
+                    if (Array.max tail < epslevel) then // We have converged! Chop tail:
                         // Find last row of coeffs with entry above epslevel
                         let Tloc = 
                             try 
                                 n - ( ac
-                                |> List.map( fun x -> x > epslevel )
-                                |> List.rev
-                                |> List.findIndex( fun x -> x) )
+                                |> Array.map( fun x -> x > epslevel )
+                                |> Array.rev
+                                |> Array.findIndex( fun x -> x) )
                             with :? System.Collections.Generic.KeyNotFoundException -> -1
                         match Tloc with
                             | -1 -> ( true , epslevel , 1 ) // Check for the zero function!
@@ -365,34 +369,34 @@ type chebtech2( c: double list , v: double , h: double , i: bool , e: double) =
                                 let t = 0.25 * 2.2e-16
                                 let tmp =
                                     ac
-                                    |> List.mapi( fun i x -> ( i , x ) )
-                                    |> List.filter( fun ( i , x ) -> i >= Tloc )
-                                    |> List.map snd
+                                    |> Array.mapi( fun i x -> ( i , x ) )
+                                    |> Array.filter( fun ( i , x ) -> i >= Tloc )
+                                    |> Array.map snd
                                 let cumMax = // Restrict to coefficients of interest to get cumulative maximum
-                                    List.scan( fun (acc:double) (x:double) -> Math.Max( acc , x ) ) t tmp
-                                    |> List.tail // remove first element
+                                    Array.scan( fun (acc:double) (x:double) -> Math.Max( acc , x ) ) t tmp
+                                    |> fun x -> x.[1..x.Length-1] // remove first element
 
                                 // Obtain an estimate for how much accuracy we'd gain 
                                 // compared to reducing length ("bang for buck"):
-                                let bang = List.map( fun x -> Math.Log( 1e3*epslevel/x ) ) cumMax
-                                let buck = [(double(n)-1.0)..(-1.0)..double(Tloc)]
-                                let Tbpb = List.map2( fun x y -> x/y ) bang buck
+                                let bang = Array.map( fun x -> Math.Log( 1e3*epslevel/x ) ) cumMax
+                                let buck = [|(double(n)-1.0)..(-1.0)..double(Tloc)|]
+                                let Tbpb = Array.map2( fun x y -> x/y ) bang buck
 
                                 // Compute position at which to chop.
                                 let bangForBuck =
                                     Tbpb
-                                    |> List.mapi( fun i x -> ( i , x ) )
-                                    |> List.filter( fun ( i , x ) -> 2 <= i && i <= n-1-Tloc )
-                                    |> List.map snd 
-                                    |> List.max
-                                let Tchop = Tbpb |> List.findIndex( fun x -> x = bangForBuck )
+                                    |> Array.mapi( fun i x -> ( i , x ) )
+                                    |> Array.filter( fun ( i , x ) -> 2 <= i && i <= n-1-Tloc )
+                                    |> Array.map snd 
+                                    |> Array.max
+                                let Tchop = Tbpb |> Array.findIndex( fun x -> x = bangForBuck )
 
                                 ( true , epslevel , n - (Tchop-1) - 2 ) 
                         
                     else // We're unhappy. :(
-                        ( false , List.average tail , 0 )
+                        ( false , Array.average tail , 0 )
 
-        let sampleTest( op: double -> double , values:double list , f:chebtech2 ) = 
+        let sampleTest( op: double -> double , values:double array , f:chebtech2 ) = 
             // Get the interpolation points:
             let n = f.length
             let x = chebtech2.chebpts(n);
@@ -405,23 +409,23 @@ type chebtech2( c: double list , v: double , h: double , i: bool , e: double) =
                 match n with
                 | 1 -> 0.61 // Pseudo-random test value
                 | _ ->  // Test a point where the (finite difference) gradient of values is largest:
-                    let dy = List.map2( fun x y -> y - x ) (List.rev (List.rev values).Tail) values.Tail
-                    let dx = List.map2( fun x y -> y - x ) (List.rev (List.rev x).Tail) x.Tail
+                    let dy = Array.map2( fun x y -> y - x ) values.[0..n-2] values.[1..n-1]
+                    let dx = Array.map2( fun x y -> y - x ) x.[0..n-2] x.[1..n-1]
                     let gradEst = // Finite difference approx.
-                        List.map2( fun x y -> y/x ) dx dy
-                        |> List.map( Math.Abs )
-                    let index = int( gradEst |> List.findIndex( fun x -> x = (List.max gradEst) ) )
+                        Array.map2( fun x y -> y/x ) dx dy
+                        |> Array.map( Math.Abs )
+                    let index = int( gradEst |> Array.findIndex( fun x -> x = (Array.max gradEst) ) )
                     (x.[index+1] - 1.41*x.[index])/2.41
-            let xevals = [ -1.0+1e-12 ; xeval ; 1.0-1e-12 ]
+            let xevals = [| -1.0+1e-12 ; xeval ; 1.0-1e-12 |]
 
             // Evaluate the CHEBTECH:
             let vFun = chebtech2.feval(f, xevals)
 
             // Evaluate the op:
-            let vOp = List.map( op ) xevals
+            let vOp = Array.map( op ) xevals
 
             // If the CHEBTECH evaluation differs from the op evaluation, SAMPLETEST failed:
-            if List.forall(fun (x:double) -> Math.Abs(x) < tol ) (List.map2( fun x y -> ( y - x )/f.vscale ) vFun vOp) then
+            if Array.forall(fun (x:double) -> Math.Abs(x) < tol ) (Array.map2( fun x y -> ( y - x )/f.vscale ) vFun vOp) then
                 true // :)
             else
                 false // :(
@@ -448,18 +452,18 @@ type chebtech2( c: double list , v: double , h: double , i: bool , e: double) =
         else
             // Check for trailing coefficients smaller than 
             // the tolerance relative to F.VSCALE:
-            let largeCoeffs = List.map( fun (x:double) -> (Math.Abs(x) - tol * f.vscale) > 0.0 ) f.coeffs
-            let firstNonZeroRow = List.tryFindIndex( fun x -> x = true ) (List.rev largeCoeffs)
+            let largeCoeffs = Array.map( fun (x:double) -> (Math.Abs(x) - tol * f.vscale) > 0.0 ) f.coeffs
+            let firstNonZeroRow = Array.tryFindIndex( fun x -> x = true ) (Array.rev largeCoeffs)
 
             // If the whole thing is now zero, leave just one coefficient:
             let coeffs = 
                 match firstNonZeroRow with 
-                | None -> [0.0]
+                | None -> [|0.0|]
                 | _ -> // or remove trailing zeros:
                     f.coeffs
-                    |> List.mapi( fun i x -> ( i , x ) )
-                    |> List.filter( fun ( i , x ) -> i < f.length - firstNonZeroRow.Value )
-                    |> List.map snd
+                    |> Array.mapi( fun i x -> ( i , x ) )
+                    |> Array.filter( fun ( i , x ) -> i < f.length - firstNonZeroRow.Value )
+                    |> Array.map snd
 
             // Update epslevel:
             let epslevel = Math.Max( f.epslevel , tol )
@@ -467,7 +471,7 @@ type chebtech2( c: double list , v: double , h: double , i: bool , e: double) =
             ( coeffs , epslevel )
                 
     // empty constructor
-    new() = chebtech2( List<double>.Empty , 0.0 , 1.0 , new bool() , new double() )
+    new() = chebtech2( Array.empty<double> , 0.0 , 1.0 , new bool() , new double() )
 
     // anon constructor
     new( op: double -> double ) =
@@ -480,8 +484,8 @@ type chebtech2( c: double list , v: double , h: double , i: bool , e: double) =
         let mutable epslevel = 2.0e-16
 
         // adaptive construction
-        let mutable values = List<double>.Empty
-        let mutable coeffs = List<double>.Empty
+        let mutable values = Array.empty<double>
+        let mutable coeffs = Array.empty<double>
 
         // Loop until ISHAPPY or GIVEUP:
         while (not(ishappy) && not(giveUp)) do
@@ -496,9 +500,9 @@ type chebtech2( c: double list , v: double , h: double , i: bool , e: double) =
                     // Update vertical scale: (Only include sampled finite values)
                     vscale <- Math.Max( vscale , 
                         values
-                        |> List.filter( fun x -> not(Double.IsInfinity(x)) )
-                        |> List.map( Math.Abs )
-                        |> List.max )
+                        |> Array.filter( fun x -> not(Double.IsInfinity(x)) )
+                        |> Array.map( Math.Abs )
+                        |> Array.max )
 
                     // Extrapolate out NaNs: (not done)
                     let newValues , maskNaN , maskInf = chebtech2.extrapolate( values )
@@ -519,15 +523,18 @@ type chebtech2( c: double list , v: double , h: double , i: bool , e: double) =
                             coeffs <- chebtech2.alias( coeffs , cutoff )
                         | false -> 
                             // Replace any NaNs or Infs we may have extrapolated:
-                            values <- List.map3( fun v n i -> 
-                                match ( n , i ) with
-                                | ( false , false ) -> v 
-                                | (  true , false ) -> Double.NaN 
-                                | (     _ ,  true ) -> Double.PositiveInfinity ) values maskNaN maskInf
+                            values <- Array.map2( fun v n -> 
+                                match n with
+                                | false -> v 
+                                | true -> Double.NaN ) values maskNaN
+                            values <- Array.map2( fun v i -> 
+                                match i  with
+                                | false -> v 
+                                | true -> Double.PositiveInfinity ) values maskInf
 
         // Update the vscale.
         // Compute the 'true' vscale (as defined in CHEBTECH classdef):
-        let vscaleOut = List.max (List.map( fun (x:double) -> Math.Abs(x) ) values)
+        let vscaleOut = Array.max (Array.map( fun (x:double) -> Math.Abs(x) ) values)
 
         // Update vertical scale one last time:
         let vscaleGlobal = Math.Max( vscale , vscaleOut )
@@ -558,9 +565,9 @@ type mapping( f : double -> double , d : double -> double , i : double -> double
     // Inverse of the map:
     member this.Inv = i
 
-    static member linear( dom: double list ) = 
-        let a = dom.Item(0)
-        let b = dom.Item(1)
+    static member linear( dom: double array ) = 
+        let a = dom.[0]
+        let b = dom.[1]
         let For (y:double) = b*(y + 1.0)/2.0 + a*(1.0 - y)/2.0
         let Der (y:double) = (b - a)/2.0 + 0.0*y
         let Inv (x:double) = (x - a)/(b - a) - (b - x)/(b - a)
@@ -571,7 +578,7 @@ type mapping( f : double -> double , d : double -> double , i : double -> double
     
 // skip all these layers of abstraction for now:
 // bndfun < classicfun < fun
-type bndfun(d : double list , m : mapping , o : chebtech2) =
+type bndfun(d : double array , m : mapping , o : chebtech2) =
     // members
     member this.domain = d
     member this.mapping = m
@@ -579,26 +586,26 @@ type bndfun(d : double list , m : mapping , o : chebtech2) =
     member this.epslevel with get() = this.onefun.epslevel
     member this.vscale with get() = this.onefun.vscale
     member this.hscale with get() = this.onefun.hscale
-    static member createMap( dom: double list) = 
+    static member createMap( dom: double array) = 
         mapping.linear( dom )
     
-    static member feval( f:bndfun , x:double list ) =
+    static member feval( f:bndfun , x:double array ) =
         // Map the input:
-        let z = List.map f.mapping.Inv x
+        let z = Array.map f.mapping.Inv x
         // Evaluate the onefun:
         chebtech2.feval( f.onefun , z )
 
     // empty constructor
-    new() = bndfun( List.empty<double> , mapping(), chebtech2() )
+    new() = bndfun( Array.empty<double> , mapping(), chebtech2() )
 
     // anon-and-domain constructor
-    new( op : double -> double , dom: double list ) = 
+    new( op : double -> double , dom: double array ) = 
 
         // check the domain input
         match dom with
-            | d when (not(d.Length.Equals(2)) || (d.Item(1) - d.Item(0)) <= 0.0) 
+            | d when (not(d.Length.Equals(2)) || (d.[1] - d.[0]) <= 0.0) 
                 -> failwith "Domain argument should be a row vector with two entries in increasing order."
-            | d when (d |> List.exists( fun x -> Double.IsInfinity(x) )) 
+            | d when (d |> Array.exists( fun x -> Double.IsInfinity(x) )) 
                 -> failwith "Should not encounter unbounded domain in bndfun class."
             | _ -> ()
         
@@ -606,14 +613,14 @@ type bndfun(d : double list , m : mapping , o : chebtech2) =
         let map = bndfun.createMap( dom )
         let scaledOp = 
             match dom with
-            | [-1.0;1.0] -> op
+            | [|-1.0;1.0|] -> op
             | _ -> fun x -> op( map.For(x) )
         
         let onefun = chebtech2( scaledOp )
         
         bndfun( dom , map , onefun ) 
 
-type chebfun( b: bndfun , d: double list ) =
+type chebfun( b: bndfun , d: double array ) =
     // members
     member this.domain = d
     member this.funs = b
@@ -621,17 +628,17 @@ type chebfun( b: bndfun , d: double list ) =
     member this.vscale with get() = this.funs.vscale
     member this.hscale with get() = this.domain.[1] - this.domain.[0]
 
-    static member feval( f:chebfun , x:double list ) =
+    static member feval( f:chebfun , x:double array ) =
         // Evaluate the appropriate fun:
         bndfun.feval( f.funs , x )
 
     // empty contructor
-    new() = chebfun( new bndfun() , List.empty<double> )
+    new() = chebfun( new bndfun() , Array.empty<double> )
 
     // anon-and-domain constructor
-    new( op : double -> double , dom: double list ) = 
+    new( op : double -> double , dom: double array ) = 
         let Fun = bndfun( op , dom )
         chebfun( Fun , dom )
 
     // anon-only constructor
-    new( op : double -> double ) = chebfun( op, [-1.0;1.0] )
+    new( op : double -> double ) = chebfun( op, [|-1.0;1.0|] )
