@@ -1,7 +1,7 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio 2012
-Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "chebfun", "chebfun\chebfun.fsproj", "{1BDD14BB-0C29-46AA-8525-D6ADA76F8744}"
+Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "FsChebfun", "FsChebfun\FsChebfun.fsproj", "{1BDD14BB-0C29-46AA-8525-D6ADA76F8744}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
