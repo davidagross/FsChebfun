@@ -1,7 +1,7 @@
 About
 =====
 
-FsChebfun is a port of Chebfun [1], the open-source software system for numerical computing with functions, from MATLAB to F#.  It's current abilities are minimal, but are intended to grow to include, at least, inversion of monotonic function, differentiation, and integration, allowing for some modest but still powerful statistical analyses.
+FsChebfun is a port of [Chebfun][1], the open-source software system for numerical computing with functions, from MATLAB to F#.  It's current abilities are minimal, but are intended to grow to include, at least, inversion of monotonic function, differentiation, and integration, allowing for some modest but still powerful statistical analyses.
 
 Structure
 =========
