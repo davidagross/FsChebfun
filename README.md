@@ -1,7 +1,7 @@
 About
 =====
 
-FsChebfun is a port of [Chebfun][1], the open-source software system for numerical computing with functions, from MATLAB to F#.  It's current abilities are minimal, but are intended to grow to include, at least, inversion of monotonic function, differentiation, and integration, allowing for some modest but still powerful statistical analyses.
+FsChebfun is a port of [Chebfun][1], the open-source software system for numerical computing with functions, from MATLAB to F#.  Its current abilities are minimal, but are intended to grow to include, at least, inversion of monotonic functions, differentiation, and integration, allowing for some modest but still powerful statistical analyses.
 
 Structure
 =========
@@ -39,7 +39,7 @@ The test methods in `test_chebfun.fs` detail some of the usage of the `chebfun` 
 let f = chebfun( fun x -> Math.Exp(-x) , [|-1.0 ; 1.0|])
 ```
 
-While function composition, max, plotting, and root-finding will not be primary priorities for this project, great power is still derived from `chebfun` creation from MATLAB-style "anonymous" function in F#, as above.  Creating a PDF from values on equispaced points and inverting their CDF is a long-term goal of this project.
+While function composition, max, plotting, and root-finding will not be primary priorities for this project, great power should still derived from `chebfun` creation from MATLAB-style "anonymous" function in F#, as above.  Creating a PDF from values on equispaced points and inverting their CDF is a long-term goal of this project.
 
 License
 =======
