@@ -620,25 +620,44 @@ type bndfun(d : double array , m : mapping , o : chebtech2) =
         
         bndfun( dom , map , onefun ) 
 
-type chebfun( b: bndfun , d: double array ) =
+type chebfun( f: bndfun array , d: double array ) =
     // members
     member this.domain = d
-    member this.funs = b
-    member this.epslevel with get() = this.funs.epslevel
-    member this.vscale with get() = this.funs.vscale
+    member this.funs = f
+    member this.vscale with get() = this.funs.[0].vscale // TODO: need to pick the fun
     member this.hscale with get() = this.domain.[1] - this.domain.[0]
 
     static member feval( f:chebfun , x:double array ) =
         // Evaluate the appropriate fun:
-        bndfun.feval( f.funs , x )
+        bndfun.feval( f.funs.[0] , x ) // TODO: need to pick the fun
 
     // empty contructor
-    new() = chebfun( new bndfun() , Array.empty<double> )
+    new() = chebfun( Array.empty<bndfun> , Array.empty<double> )
 
     // anon-and-domain constructor
-    new( op : double -> double , dom: double array ) = 
-        let Fun = bndfun( op , dom )
-        chebfun( Fun , dom )
+    new( op: double -> double , dom: double array ) = 
+
+        let numIntervals = dom.Length-1
+        let ends = dom
+        let funs = Array.zeroCreate<bndfun> numIntervals
+
+        // Call the FUN constructor
+        let getFun( op : double -> double , dom: double array ) =
+            // Call the FUN constructor (which is the bndfun
+            // consutctor before we support unbndfuns or deltafuns):
+            let g = bndfun( op, dom )
+
+            // See if the construction was happy:
+            let ishappy = g.onefun.ishappy
+            ( g, ishappy )
+
+        for k in [| 0 .. numIntervals-1 |] do
+            let endsk = ends.[k..k+1]
+            let funk , ishappy = getFun( op, endsk)
+            funs.[k] <- funk
+            if not(ishappy) then
+                failwith ("Function not resolved using " + funk.onefun.length.ToString() + " pts.")
+        chebfun( funs , dom )
 
     // anon-only constructor
     new( op : double -> double ) = chebfun( op, [|-1.0;1.0|] )
