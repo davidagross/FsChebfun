@@ -624,12 +624,35 @@ type chebfun( f: bndfun array , d: double array ) =
     // members
     member this.domain = d
     member this.funs = f
-    member this.vscale with get() = this.funs.[0].vscale // TODO: need to pick the fun
+    member this.vscale with get() = 
+        let localVscale( f:bndfun ) = f.vscale
+        // Get the maximum of the local vscales:
+        Array.max (Array.map localVscale this.funs)
     member this.hscale with get() = this.domain.[1] - this.domain.[0]
 
     static member feval( f:chebfun , x:double array ) =
-        // Evaluate the appropriate fun:
-        bndfun.feval( f.funs.[0] , x ) // TODO: need to pick the fun
+        let numFuns = f.funs.Length
+        if ( numFuns = 1 ) then
+            // Things are simple when there is only a single FUN:
+            bndfun.feval( f.funs.[0] , x )
+        else
+            let mutable out = Array.zeroCreate<double> x.Length
+            // For multiple FUNs we must determine which FUN corresponds to each x.
+            // Replace the first and last domain entries with +/-inf. (Since we want to
+            // use FUN{1} if real(x) < dom(1) and FUN{end} if real(x) > dom(end)).
+            let domInf = f.domain
+            domInf.[0] <- Double.NegativeInfinity
+            domInf.[domInf.Length-1] <- Double.PositiveInfinity
+            for k in [| 0 .. numFuns-1 |] do
+                let isInThisDom = fun x -> x >= domInf.[k] & x < domInf.[k+1]
+                let I = Array.map isInThisDom x
+                let theseX = Array.filter isInThisDom x
+                // Evaluate the appropriate fun 
+                out <- Array.mapi (fun i o -> 
+                    match I.[i] with
+                    | true -> bndfun.feval( f.funs.[k] , [|x.[i]|] ).[0]
+                    | false -> o) out
+            out
 
     // empty contructor
     new() = chebfun( Array.empty<bndfun> , Array.empty<double> )

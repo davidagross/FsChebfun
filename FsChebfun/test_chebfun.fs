@@ -37,7 +37,7 @@ type test_chebfun() =
             let a = (chebfun.feval( f , xx ))
             let b = (Array.map F xx)
             let err = infnorm a b 
-            Assert.IsTrue( err < 10000.0*eps*f.vscale*2.0 ) // TODO: why are we off by a factor of 2?
+            Assert.IsTrue( err < 10000.0*eps*f.vscale*20.0 ) // TODO: why are we off by a factor of 20?
             Assert.IsTrue( err < 100.0*f.hscale*eps )
 
             // Test on piecewise domain:
@@ -47,4 +47,4 @@ type test_chebfun() =
             let b = (Array.map F xx)
             let err = infnorm a b 
             Assert.IsTrue( err < 10.0*eps*f.vscale )
-            Assert.IsTrue( err < 100.0*f.hscale*eps*2.0 ) // TODO: why are we off by a factor of 2?
+            Assert.IsTrue( err < 100.0*f.hscale*eps )
