@@ -624,10 +624,11 @@ type chebfun( f: bndfun array , d: double array ) =
     // members
     member this.domain = d
     member this.funs = f
-    member this.vscale with get() = 
-        let localVscale( f:bndfun ) = f.vscale
-        // Get the maximum of the local vscales:
-        Array.max (Array.map localVscale this.funs)
+    member this.vscale 
+        with get() = 
+            let localVscale( f:bndfun ) = f.vscale
+            // Get the maximum of the local vscales:
+            Array.max (Array.map localVscale this.funs)
     member this.hscale with get() = this.domain.[1] - this.domain.[0]
 
     static member feval( f:chebfun , x:double array ) =
@@ -644,7 +645,7 @@ type chebfun( f: bndfun array , d: double array ) =
             domInf.[0] <- Double.NegativeInfinity
             domInf.[domInf.Length-1] <- Double.PositiveInfinity
             for k in [| 0 .. numFuns-1 |] do
-                let isInThisDom = fun x -> x >= domInf.[k] & x < domInf.[k+1]
+                let isInThisDom = fun x -> x >= domInf.[k] && x < domInf.[k+1]
                 let I = Array.map isInThisDom x
                 let theseX = Array.filter isInThisDom x
                 // Evaluate the appropriate fun 
