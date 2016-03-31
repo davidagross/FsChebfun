@@ -75,7 +75,6 @@
     <None Include="Script.fsx" />
     <None Include="packages.config" />
     <Compile Include="test_chebfun.fs" />
-    <None Include="FsEye.fsx" />
     <None Include="app.config" />
   </ItemGroup>
   <PropertyGroup>

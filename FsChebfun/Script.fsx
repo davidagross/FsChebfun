@@ -7,6 +7,6 @@
 open Chebfun
 open System
 
-let x = new chebfun( (fun x -> x) )
+let x = new chebfun( (fun x -> x*x) )
 
-chebfun.feval(x , [Math.PI/10.0])
+chebfun.feval(x , [|Math.PI/10.0|]) |> Array.map Math.Sqrt
